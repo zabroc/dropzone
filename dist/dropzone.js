@@ -543,6 +543,20 @@ var Dropzone = function (_Emitter) {
           done();
         },
 
+
+        /**
+         * The callback that will be invoked when a chunk upload returns an error.
+         * It gets the failed chunk as the first parameter,
+         * and the `done` function as second. `done()` needs to be invoked if you want to ignore
+         * the erroneous chunk, this way  it will use retryChunks to keep trying.
+         * If done(error) gets called with a parameter the retry cycle will be interrupted and the error processing
+         * starts right away.
+         */
+        chunkError: function chunkError(chunk, done) {
+            return done();
+        },
+
+
         /**
          * Gets called when the browser is not supported.
          * The default implementation shows the fallback input field and adds
@@ -2744,18 +2758,25 @@ var Dropzone = function (_Emitter) {
   }, {
     key: "_handleUploadError",
     value: function _handleUploadError(files, xhr, response) {
+      var _this17 = this;
       if (files[0].status === Dropzone.CANCELED) {
         return;
       }
 
       if (files[0].upload.chunked && this.options.retryChunks) {
-        var chunk = this._getChunk(files[0], xhr);
-        if (chunk.retries++ < this.options.retryChunksLimit) {
-          this._uploadData(files, [chunk.dataBlock]);
-          return;
-        } else {
-          console.warn('Retried this chunk too often. Giving up.');
-        }
+          var chunk = this._getChunk(files[0], xhr);
+          if (chunk.retries++ < this.options.retryChunksLimit) {
+              this.options.chunkError(chunk, function (error) {
+                  if (error) {
+                      _this17._errorProcessing(files, response || this.options.dictResponseError.replace("{{statusCode}}", xhr.status), xhr);
+                  } else {
+                      _this17._uploadData(files, [chunk.dataBlock]);
+                  }
+              });
+              return;
+          } else {
+              console.warn('Retried this chunk too often. Giving up.');
+          }
       }
 
       for (var _iterator30 = files, _isArray30 = true, _i32 = 0, _iterator30 = _isArray30 ? _iterator30 : _iterator30[Symbol.iterator]();;) {
